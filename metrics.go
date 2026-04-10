@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+// track server hits
+// wrapper increments hits by 1
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserverHits.Add(1)
@@ -12,6 +14,7 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
+// endpoint returns server hits metric
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Add("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<html>

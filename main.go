@@ -19,35 +19,43 @@ type apiConfig struct {
 }
 
 func main() {
+	// constants
 	const port = "8080"
 	const filepathRoot = "."
+
+	// load environment
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
+
+	// connect to database
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Error connecting to database: ", err)
 	}
-
 	dbQueries := database.New(db)
 
+	// create config struct
 	cfg := apiConfig{fileserverHits: atomic.Int32{}, queries: dbQueries, platform: platform}
 
+	// register endpoints
 	mux := http.NewServeMux()
 	mux.Handle("/app/", cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))))
 
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
-	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
 	mux.HandleFunc("POST /api/users", cfg.handlerCreateUser)
+	mux.HandleFunc("POST /api/chirps", cfg.handlerPostChirp)
 
 	mux.HandleFunc("POST /admin/reset", cfg.handlerReset)
 	mux.HandleFunc("GET /admin/metrics", cfg.handlerMetrics)
 
+	// create server struct
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: mux,
 	}
 
+	// start server
 	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)
 	log.Fatal(srv.ListenAndServe())
 }

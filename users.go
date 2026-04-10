@@ -11,7 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// endpoint create a new user
+// requires unique email address
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
+	// decode request
 	type newUser struct {
 		Email string `json:"email"`
 	}
@@ -19,23 +22,29 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&user); err != nil {
 		log.Printf("Error decoding request body: %v", err)
-		respondWithError(w, 500, "Error decoding request body", err)
+		respondWithError(w, http.StatusInternalServerError, "Error decoding request body", err)
 		return
 	}
+
+	// check for valid request body
 	if user.Email == "" {
 		log.Printf("Create user request received without valid body")
-		respondWithError(w, 400, "Include \"email\" in request body", nil)
+		respondWithError(w, http.StatusBadRequest, "Include \"email\" in request body", nil)
 		return
 	}
+
+	// create database entry for user
 	result, err := cfg.queries.CreateUser(context.Background(), user.Email)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
-			respondWithError(w, 400, "Email taken, use a different email", err)
+			respondWithError(w, http.StatusBadRequest, "Email taken, use a different email", err)
 			return
 		}
-		respondWithError(w, 500, "Error creating user", err)
+		respondWithError(w, http.StatusInternalServerError, "Error creating user", err)
 		return
 	}
+
+	// return success message
 	type Response struct {
 		ID        uuid.UUID `json:"id"`
 		CreatedAt time.Time `json:"created_at"`
@@ -48,5 +57,5 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		UpdatedAt: result.UpdatedAt,
 		Email:     result.Email,
 	}
-	respondWithJSON(w, 201, response)
+	respondWithJSON(w, http.StatusCreated, response)
 }
