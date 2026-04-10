@@ -1,2 +1,6 @@
 out
 requests/
+psql.sh
+goose.sh
+.env
+chirpy
