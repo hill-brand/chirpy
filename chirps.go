@@ -12,6 +12,14 @@ import (
 	"github.com/luckysal/chirpy/internal/database"
 )
 
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
 // post a chirp to the database
 // requires json body and user_id
 func (cfg *apiConfig) handlerPostChirp(w http.ResponseWriter, r *http.Request) {
@@ -24,51 +32,44 @@ func (cfg *apiConfig) handlerPostChirp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// decode request body
-	type newChirp struct {
+	type input struct {
 		Body   string    `json:"body"`
 		UserID uuid.UUID `json:"user_id"`
 	}
-	var chirp newChirp
+	var newChirp input
 	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&chirp); err != nil {
+	if err := decoder.Decode(&newChirp); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error decoding request", err)
 		return
 	}
 
 	// validate request body
-	if chirp.Body == "" || chirp.UserID == uuid.Nil {
+	if newChirp.Body == "" || newChirp.UserID == uuid.Nil {
 		respondWithError(w, http.StatusBadRequest, "Chirps require a body and a user_id", nil)
 		return
 	}
-	if len(chirp.Body) > MAX_CHIRP_LENGTH {
+	if len(newChirp.Body) > MAX_CHIRP_LENGTH {
 		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
 		return
 	}
 
 	// clean body
-	cleanedBody := cleanMessage(chirp.Body, BANNED_WORDS)
+	cleanedBody := cleanMessage(newChirp.Body, BANNED_WORDS)
 	params := database.CreateChirpParams{
 		Body:   cleanedBody,
-		UserID: chirp.UserID,
+		UserID: newChirp.UserID,
 	}
 
-	// post to database
+	// save to database
 	result, err := cfg.queries.CreateChirp(context.Background(), params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error creating chirp", err)
 		return
 	}
 
-	// success message
-	type response struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Body      string    `json:"body"`
-		UserID    uuid.UUID `json:"user_id"`
-	}
+	// success message and response
 	log.Printf("Chirp posted with id: %v", result.ID)
-	resp := response{
+	resp := Chirp{
 		ID:        result.ID,
 		CreatedAt: result.CreatedAt,
 		UpdatedAt: result.UpdatedAt,
@@ -76,6 +77,31 @@ func (cfg *apiConfig) handlerPostChirp(w http.ResponseWriter, r *http.Request) {
 		UserID:    result.UserID,
 	}
 	respondWithJSON(w, http.StatusCreated, resp)
+}
+
+// get all chirps from database
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, _ *http.Request) {
+	dbChirps, err := cfg.queries.GetChirps(context.Background())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to load chirps from database", err)
+		return
+	}
+
+	// convert to json formatted structs
+	chirps := []Chirp{}
+	for _, dbChirp := range dbChirps {
+		chirps = append(chirps, Chirp{
+			ID:        dbChirp.ID,
+			CreatedAt: dbChirp.CreatedAt,
+			UpdatedAt: dbChirp.UpdatedAt,
+			Body:      dbChirp.Body,
+			UserID:    dbChirp.UserID,
+		})
+	}
+
+	// success message and response
+	log.Printf("Returning %d chirps", len(chirps))
+	respondWithJSON(w, http.StatusOK, chirps)
 }
 
 // finds banned words in message
