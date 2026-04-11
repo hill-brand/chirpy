@@ -104,6 +104,38 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, _ *http.Request) {
 	respondWithJSON(w, http.StatusOK, chirps)
 }
 
+// get one chirp by chirp ID
+func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request) {
+	// parse chirp_id
+	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid chirp_id", err)
+		return
+	}
+
+	// retreive chirp from database
+	dbChirp, err := cfg.queries.GetChirpByID(context.Background(), chirpID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows") {
+			respondWithError(w, http.StatusNotFound, "Chirp not found", err)
+		} else {
+			respondWithError(w, http.StatusInternalServerError, "Error getting chirp", err)
+		}
+		return
+	}
+
+	// success message and response
+	chirp := Chirp{
+		ID:        dbChirp.ID,
+		CreatedAt: dbChirp.CreatedAt,
+		UpdatedAt: dbChirp.UpdatedAt,
+		Body:      dbChirp.Body,
+		UserID:    dbChirp.UserID,
+	}
+	log.Printf("Retreived chirp with id: %v", dbChirp.ID)
+	respondWithJSON(w, http.StatusOK, chirp)
+}
+
 // finds banned words in message
 // replaces banned words with "****"
 // returns new message
