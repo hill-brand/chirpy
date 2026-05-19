@@ -2,34 +2,67 @@ package auth
 
 import (
 	"testing"
-
-	"github.com/alexedwards/argon2id"
 )
 
-func TestHashPassword(t *testing.T) {
-	password := "password123"
-	want, err := argon2id.CreateHash(password, argon2id.DefaultParams)
-	if err != nil {
-		t.Errorf("Hashing failed: %v", err)
-	}
-	hashed_password, err := HashPassword(password)
-	match, err1 := argon2id.ComparePasswordAndHash(password, hashed_password)
-	if err1 != nil {
-		t.Errorf("Hashing failed: %v", err)
-	}
-	if !match || err != nil {
-		t.Errorf(`HashPassword(%q) = %q, %v, want %q, <nil>`, password, hashed_password, err, want)
-	}
-}
+func TestCheckPasswordHash(t *testing.T) {
+	password1 := "correctPassword123!"
+	password2 := "anotherPassword456!"
+	hash1, _ := HashPassword(password1)
+	hash2, _ := HashPassword(password2)
 
-func TestComparePasswordHash(t *testing.T) {
-	password := "password123"
-	hashed_password, err := argon2id.CreateHash(password, argon2id.DefaultParams)
-	if err != nil {
-		t.Errorf("Hashing failed: %v", err)
+	tests := []struct {
+		name          string
+		password      string
+		hash          string
+		wantErr       bool
+		matchPassword bool
+	}{
+		{
+			name:          "Correct password",
+			password:      password1,
+			hash:          hash1,
+			wantErr:       false,
+			matchPassword: true,
+		},
+		{
+			name:          "Incorrect password",
+			password:      "wrongPassword",
+			hash:          hash1,
+			wantErr:       false,
+			matchPassword: false,
+		},
+		{
+			name:          "Password doesn't match different hash",
+			password:      password1,
+			hash:          hash2,
+			wantErr:       false,
+			matchPassword: false,
+		},
+		{
+			name:          "Empty password",
+			password:      "",
+			hash:          hash1,
+			wantErr:       false,
+			matchPassword: false,
+		},
+		{
+			name:          "Invalid hash",
+			password:      password1,
+			hash:          "invalidhash",
+			wantErr:       true,
+			matchPassword: false,
+		},
 	}
-	match, err := CheckPasswordHash(password, hashed_password)
-	if !match || err != nil {
-		t.Errorf(`CheckPasswordHash("password123", %q) = %t, %v, want true, <nil>`, hashed_password, match, err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			match, err := CheckPasswordHash(tt.password, tt.hash)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CheckPasswordHash() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && match != tt.matchPassword {
+				t.Errorf("CheckPasswordHash() expects %v, got %v", tt.matchPassword, match)
+			}
+		})
 	}
 }
